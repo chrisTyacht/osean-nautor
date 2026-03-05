@@ -3,7 +3,7 @@
 ## OSEAN DAO CONTRACTS
 In this repository you will find under contracts directory:
 
-1) OSEAN DAO CONTRACT (based on Thirdweb Vote with additional interfaces to allow onlyGovernance to swap OSEAN, BNB and USDT).
+1) OSEAN DAO CONTRACT (based on Thirdweb Vote with additional interfaces to allow onlyGovernance to swap NAU, ETH and USDT).
 2) NFT GOVERNANCE CONTRACT (based on Thirdweb DropERC721. The contract has been altered to support voting for OZ governor with VotesUpgradeable.sol extension)
 3) Nautor (NAU) utility token built for OSEAN DAO.
 
