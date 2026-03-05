@@ -251,7 +251,42 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         emit MaxSwapTokensSet(maxSwapTokens);
     }
 
-    // --- ✅ DAO-only manager rotation ---
+    // --- Role management with DAO revoke protection ---
+    function renounceRole(bytes32 role, address account) public override(Permissions, IPermissions) {
+        if (role == DAO_ROLE && hasRole(DAO_ROLE, account)) {
+            require(_daoMemberCount() >= 2, "DAO_LAST_RENOUNCE");
+        }
+
+        super.renounceRole(role, account);
+    }
+
+    function revokeRole(bytes32 role, address account) public override(Permissions, IPermissions) {
+        if (role == DAO_ROLE && hasRole(DAO_ROLE, account)) {
+            // Disallow revoking if it would leave 0 DAO members.
+            // Require at least 2 DAO_ROLE members before any revoke.
+            require(_daoMemberCount() >= 2, "DAO_MIN_1");
+        }
+
+        super.revokeRole(role, account);
+    }
+
+    function rotateDao(address newDao, address oldDao) external onlyDao {
+        require(newDao != address(0), "DAO_ZERO");
+
+        // 1) add new DAO first (if not already)
+        if (!hasRole(DAO_ROLE, newDao)) {
+            grantRole(DAO_ROLE, newDao);
+        }
+        
+        _setExcludedFromFees(newDao, true);
+
+        // 2) now revoke old DAO (guarded by revokeRole override)
+        if (oldDao != address(0) && hasRole(DAO_ROLE, oldDao)) {
+            revokeRole(DAO_ROLE, oldDao);
+        }
+    }
+
+    // --- DAO-only manager rotation ---
     function setManager(address newManager) external onlyDao {
         require(newManager != address(0), "MANAGER_ZERO");
 
@@ -259,6 +294,7 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
 
         if (old != address(0) && hasRole(MANAGER_ROLE, old)) {
             revokeRole(MANAGER_ROLE, old);
+            _setExcludedFromFees(old, false);
         }
 
         manager = newManager;
@@ -275,8 +311,10 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         renounceRole(MANAGER_ROLE, msg.sender);
         if (manager == msg.sender) {
             manager = address(0);
-            emit ManagerUpdated(msg.sender, address(0));
+            emit ManagerUpdated(msg.sender, address(0));           
         }
+
+        _setExcludedFromFees(msg.sender, false);
     }
 
     // --- Owner, DAO, and Manager config setters ---
@@ -346,6 +384,13 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
     }
 
     // --- Utility / testing helpers ---
+    function daoMemberCount() public view returns (uint256) {
+        return _daoMemberCount();
+    }
+
+    function _daoMemberCount() internal view returns (uint256) {
+        return IPermissionsEnumerable(address(this)).getRoleMemberCount(DAO_ROLE);
+    }
 
     function getContractAddress() external view returns (address) {
         return address(this);
