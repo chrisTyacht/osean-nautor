@@ -1,3 +1,13 @@
+![OSEANDAO](https://osean.online/images/oseanone.jpg)
+
+## OSEAN DAO CONTRACTS
+In this repository you will find under contracts directory:
+
+1) OSEAN DAO CONTRACT (based on Thirdweb Vote with additional interfaces to allow onlyGovernance to swap OSEAN, BNB and USDT).
+2) NFT GOVERNANCE CONTRACT (based on Thirdweb DropERC721. The contract has been altered to support voting for OZ governor with VotesUpgradeable.sol extension)
+3) Nautor (NAU) utility token built for OSEAN DAO.
+
+
 ## Getting Started
 
 Create a project using this example:
@@ -32,14 +42,6 @@ npm run deploy
 yarn deploy
 ```
 
-> [!IMPORTANT]
-> This requires a secret key to make it work. Get your secret key [here](https://thirdweb.com/dashboard/settings/api-keys).
-> Pass your secret key as a value after `-k` flag.
-> ```bash
-> npm run deploy -- -k <your-secret-key>
-> # or
-> yarn deploy -k <your-secret-key>
-
 ## Releasing Contracts
 
 If you want to release a version of your contracts publicly, you can use one of the followings command:
@@ -49,7 +51,3 @@ npm run release
 # or
 yarn release
 ```
-
-## Join our Discord!
-
-For any questions, suggestions, join our discord at [https://discord.gg/thirdweb](https://discord.gg/thirdweb).
