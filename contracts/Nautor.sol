@@ -16,7 +16,7 @@ pragma solidity ^0.8.0;
 
     ETH distribution:
     - ETH received from swaps can be auto-distributed after transfers when contract ETH balance exceeds autoDisperseThreshold
-      (default 0.05 ether; set to 0 to disable auto-disperse and rely on manual disperse).
+      (default 0.25 ether; set to 0 to disable auto-disperse and rely on manual disperse).
     - ETH is split between nautorWalletAddress and daoWalletAddress based on nautorFeePercent and daoFeePercent
       (parts-based split; 1/1 = 50/50, 2/1 = 66/33, etc.).
     - ETH sends use low-level .call and NEVER revert token transfers; failures emit FeeTransferFailed and ETH remains in contract.
@@ -27,12 +27,14 @@ pragma solidity ^0.8.0;
     - lockDisperse prevents recursive/looping fee distributions during ETH sends.
     - Max tax cap: buyTax and sellTax are individually capped at 5% via setTaxes().
 
-    Owner controls:
-    - Can set buy/sell taxes (0–5% each).
-    - Can set fee split parts (nautorFeePercent / daoFeePercent).
-    - Can set swapTokensAtAmount and maxSwapTokens.
-    - Can set autoDisperseThreshold (including disabling it with 0).
-    - Can update fee wallets and manage fee exclusions.
+    DAO / Manager controls:
+    - DAO can manage DAO_ROLE membership through grantRole / revokeRole and can rotate the manager; manager can resign.
+    - Both DAO and Manager can:
+        - Update buy/sell taxes (0–5% each).
+        - Update fee split parts (nautorFeePercent / daoFeePercent).
+        - Update swapTokensAtAmount and maxSwapTokens.
+        - Update autoDisperseThreshold (including disabling it with 0).
+        - Update fee wallet addresses and manage fee exclusions.
 
     Notes:
     - This contract does not implement a pendingWithdrawals pull-pattern for failed ETH sends (ETH remains in the contract
@@ -41,8 +43,8 @@ pragma solidity ^0.8.0;
 */
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@thirdweb-dev/contracts/extension/PermissionsEnumerable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // --- Interface ---
 
@@ -64,7 +66,7 @@ interface IUniswapV2Router02 {
     ) external;
 }
 
-contract Nautor is ERC20, Ownable, PermissionsEnumerable {
+contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
     // --- Roles (if needed for future extensions) ---
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
@@ -236,7 +238,6 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         _setExcludedFromFees(_nautorWalletAddress, true);
         _setExcludedFromFees(_daoWalletAddress, true);
         _setExcludedFromFees(address(this), true);
-        _setExcludedFromFees(msg.sender, true);
         _setExcludedFromFees(_daoRoleHolder, true);
         _setExcludedFromFees(_managerRoleHolder, true);
 
@@ -270,36 +271,22 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         super.revokeRole(role, account);
     }
 
-    function rotateDao(address newDao, address oldDao) external onlyDao {
-        require(newDao != address(0), "DAO_ZERO");
-
-        // 1) add new DAO first (if not already)
-        if (!hasRole(DAO_ROLE, newDao)) {
-            grantRole(DAO_ROLE, newDao);
-        }
-        
-        _setExcludedFromFees(newDao, true);
-
-        // 2) now revoke old DAO (guarded by revokeRole override)
-        if (oldDao != address(0) && hasRole(DAO_ROLE, oldDao)) {
-            revokeRole(DAO_ROLE, oldDao);
-        }
-    }
-
     // --- DAO-only manager rotation ---
     function setManager(address newManager) external onlyDao {
         require(newManager != address(0), "MANAGER_ZERO");
 
         address old = manager;
 
-        if (old != address(0) && hasRole(MANAGER_ROLE, old)) {
+        if (old != address(0) && old != newManager && hasRole(MANAGER_ROLE, old)) {
             revokeRole(MANAGER_ROLE, old);
             _setExcludedFromFees(old, false);
         }
 
-        manager = newManager;
-        grantRole(MANAGER_ROLE, newManager);
+        if (!hasRole(MANAGER_ROLE, newManager)) {
+            grantRole(MANAGER_ROLE, newManager);
+        }
 
+        manager = newManager;
         _setExcludedFromFees(newManager, true);
 
         emit ManagerUpdated(old, newManager);
@@ -317,7 +304,7 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         _setExcludedFromFees(msg.sender, false);
     }
 
-    // --- Owner, DAO, and Manager config setters ---
+    // --- DAO and Manager config setters ---
 
     /// @dev set buy/sell taxes independently
     function setTaxes(uint256 _buyTax, uint256 _sellTax) external onlyDaoOrManager {
@@ -527,7 +514,7 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
 
     // --- Manual swap to tax tokens ---
 
-    function swapFeesManually() external onlyDaoOrManager {
+    function swapFeesManually() external onlyDaoOrManager nonReentrant {
         uint256 contractTokenBalance = balanceOf(address(this));
         if (contractTokenBalance > 0) {
             uint256 swapAmount = contractTokenBalance;
@@ -538,7 +525,7 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
         }
     }
 
-    function disperseFeesManually() external onlyDaoOrManager {
+    function disperseFeesManually() external onlyDaoOrManager nonReentrant {
         uint256 contractETHBalance = address(this).balance;
         _sendFeesToWallets(contractETHBalance);
     }

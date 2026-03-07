@@ -67,7 +67,6 @@ contract OseanNFT is
 
     /// @dev Initializes the contract, like a constructor.
     constructor(
-        address _defaultAdmin,
         string memory _name,
         string memory _symbol,
         string memory _contractURI,
@@ -76,7 +75,6 @@ contract OseanNFT is
         address _royaltyRecipient,
         uint128 _royaltyBps
     ) {
-        require(_defaultAdmin != address(0), "admin = zero");
         require(_saleRecipient != address(0), "saleRecipient = zero");
         require(_royaltyRecipient != address(0), "royaltyRecipient = zero");
 
@@ -89,13 +87,13 @@ contract OseanNFT is
         __ERC721Votes_init();
 
         _setupContractURI(_contractURI);
-        _setupOwner(_defaultAdmin);
+        _setupOwner(msg.sender);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-        _setupRole(_minterRole, _defaultAdmin);
-        _setupRole(_transferRole, _defaultAdmin);
+        _setupRole(DEFAULT_ADMIN_ROLE,  msg.sender);
+        _setupRole(_minterRole, msg.sender);
+        _setupRole(_transferRole, msg.sender);
         _setupRole(_transferRole, address(0));
-        _setupRole(_metadataRole, _defaultAdmin);
+        _setupRole(_metadataRole, msg.sender);
         _setRoleAdmin(_metadataRole, _metadataRole);
 
         _setupDefaultRoyaltyInfo(_royaltyRecipient, _royaltyBps);
@@ -178,6 +176,10 @@ contract OseanNFT is
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyRole(DEFAULT_ADMIN_ROLE) {
         maxTotalSupply = _maxTotalSupply;
         emit MaxTotalSupplyUpdated(_maxTotalSupply);
+    }
+
+    function addAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
     }
 
     /*///////////////////////////////////////////////////////////////
