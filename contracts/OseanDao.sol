@@ -1,9 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.11;
 
-// @author OSEAN DAO
-// THIS IS THE OFFICIAL OSEAN DAO GOVERNANCE CONTRACT - https://osean.online & https://oseandao.com 
-//DO NOT DEPLOY CLONES OF THIS CONTRACT WITHOUT FIRST CHECKING WITH OSEAN DAO LLC.
+/**
+ * @title OSEAN DAO Governance Contract
+ * @author OSEAN DAO LLC
+ *
+ * @notice
+ * Official on-chain governance contract for the OSEAN DAO.
+ * THIS IS THE OFFICIAL OSEAN DAO GOVERNANCE CONTRACT - https://osean.online & https://oseandao.com
+ *
+ * @dev
+ * This contract is based on OpenZeppelin GovernorUpgradeable and uses
+ * ERC2771 meta-transactions. Voting power is derived from an external
+ * IVotes-compatible governance token, which in the OSEAN system is the
+ * KYC-restricted governance NFT.
+ *
+ * Main features:
+ * - Proposal creation and voting
+ * - Quorum-based execution
+ * - Governor settings (delay, period, threshold)
+ * - Treasury actions controlled only through governance
+ * - Meta-transaction support
+ *
+ * Treasury functions currently include token/ETH swap operations through
+ * a Uniswap V2-compatible router. These functions are restricted to
+ * governance execution only.
+ */
 
 // Base
 import "@thirdweb-dev/contracts/infra/interface/IThirdwebContract.sol";
@@ -33,7 +55,7 @@ contract OseanDao is
     GovernorVotesUpgradeable,
     GovernorVotesQuorumFractionUpgradeable
 {
-    bytes32 private constant MODULE_TYPE = bytes32("VoteERC20");
+    bytes32 private constant MODULE_TYPE = bytes32("VoteERC721");
     uint256 private constant VERSION = 1;
 
     string public contractURI;

@@ -1,9 +1,37 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.11;
 
-/// @author OSEAN DAO BASED ON THIRDWEB DROPERC721
-/// Vote features have been implemented to this contract
-
+/**
+ * @title OSEAN DAO Governance NFT
+ * @author OSEAN DAO LLC
+ *
+ * @notice
+ * Governance NFT contract used by the OSEAN DAO to represent verified DAO
+ * membership and voting power - https://osean.online & https://oseandao.com
+ *
+ * @dev
+ * This contract is based on Thirdweb's DropERC721 implementation with
+ * additional governance and compliance features:
+ *
+ * - ERC721A-based gas-efficient NFT minting
+ * - ERC721Votes integration for on-chain governance voting power
+ * - Lazy minting support via Thirdweb Drop mechanics
+ * - KYC enforcement via an external KYCRegistry contract
+ * - Restricted operator approvals (only approved marketplace contracts)
+ * - Governance NFTs cannot be burned
+ *
+ * Compliance Rules:
+ * - Only wallets approved in the KYCRegistry may receive or transfer NFTs
+ * - Transfers between non-KYC wallets are rejected
+ * - Marketplace operators must be explicitly approved by DAO administrators
+ *
+ * Privacy Design:
+ * The contract does not store any personal data on-chain. KYC information is
+ * managed off-chain and only a minimal approval flag is verified through the
+ * external KYC registry contract.
+ *
+ * This NFT represents governance rights within the OSEAN DAO ecosystem.
+ */
 
 import "@thirdweb-dev/contracts/extension/Multicall.sol";
 import "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
@@ -25,6 +53,10 @@ import "@thirdweb-dev/contracts/extension/LazyMint.sol";
 import "@thirdweb-dev/contracts/extension/PermissionsEnumerable.sol";
 import "@thirdweb-dev/contracts/extension/Drop.sol";
 
+interface IKYCRegistry {
+    function isKYC(address account) external view returns (bool);
+}
+
 contract OseanNFT is
     ContractMetadata,
     Royalty,
@@ -42,9 +74,6 @@ contract OseanNFT is
     /*///////////////////////////////////////////////////////////////
                             State variables
     //////////////////////////////////////////////////////////////*/
-
-    /// @dev Only transfers to or from TRANSFER_ROLE holders are valid, when transfers are restricted.
-    bytes32 private transferRole;
     
     /// @dev Only MINTER_ROLE holders can sign off on `MintRequest`s and lazy mint tokens.
     bytes32 private minterRole;
@@ -57,6 +86,14 @@ contract OseanNFT is
 
     /// @dev Emitted when the global max supply of tokens is updated.
     event MaxTotalSupplyUpdated(uint256 maxTotalSupply);
+    event KYCRegistryUpdated(address indexed registry);
+    event ApprovedOperatorUpdated(address indexed operator, bool approved);
+
+    /// @dev External KYC registry used to validate who may hold / receive governance NFTs.
+    IKYCRegistry public kycRegistry;
+
+    /// @dev Approved marketplace / operator contracts that may be granted approvals.
+    mapping(address => bool) public approvedOperators;
 
     /*///////////////////////////////////////////////////////////////
                     Constructor + initializer logic
@@ -70,12 +107,13 @@ contract OseanNFT is
         address[] memory _trustedForwarders,
         address _saleRecipient,
         address _royaltyRecipient,
-        uint128 _royaltyBps
+        uint128 _royaltyBps,
+        address _kycRegistry
     ) initializer {
         require(_saleRecipient != address(0), "saleRecipient = zero");
         require(_royaltyRecipient != address(0), "royaltyRecipient = zero");
-
-        bytes32 _transferRole = keccak256("TRANSFER_ROLE");
+        require(_kycRegistry != address(0), "kycRegistry = zero");
+        
         bytes32 _minterRole = keccak256("MINTER_ROLE");
         bytes32 _metadataRole = keccak256("METADATA_ROLE");
 
@@ -87,17 +125,17 @@ contract OseanNFT is
 
         _setupRole(DEFAULT_ADMIN_ROLE,  msg.sender);
         _setupRole(_minterRole, msg.sender);
-        _setupRole(_transferRole, msg.sender);
-        _setupRole(_transferRole, address(0));
         _setupRole(_metadataRole, msg.sender);
         _setRoleAdmin(_metadataRole, _metadataRole);
 
         _setupDefaultRoyaltyInfo(_royaltyRecipient, _royaltyBps);
         _setupPrimarySaleRecipient(_saleRecipient);
-
-        transferRole = _transferRole;
+        
         minterRole = _minterRole;
         metadataRole = _metadataRole;
+
+        kycRegistry = IKYCRegistry(_kycRegistry);
+        emit KYCRegistryUpdated(_kycRegistry);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -179,10 +217,45 @@ contract OseanNFT is
         grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
     }
 
+    function setKYCRegistry(address _registry) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_registry != address(0), "registry=0");
+        kycRegistry = IKYCRegistry(_registry);
+        emit KYCRegistryUpdated(_registry);
+    }
+
+    function setApprovedOperator(address operator, bool approved)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(operator != address(0), "operator=0");
+        approvedOperators[operator] = approved;
+        emit ApprovedOperatorUpdated(operator, approved);
+    }
+
+    function getApproved(uint256 tokenId) public view virtual override returns (address) {
+        address operator = super.getApproved(tokenId);
+        return approvedOperators[operator] ? operator : address(0);
+    }
+
+    function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
+        if (!approvedOperators[operator]) {
+            return false;
+        }
+        return super.isApprovedForAll(owner, operator);
+    }
+
     /*///////////////////////////////////////////////////////////////
                         Internal functions
     //////////////////////////////////////////////////////////////*/
 
+     function _isKYC(address account) internal view returns (bool) {
+        return address(kycRegistry) != address(0) && kycRegistry.isKYC(account);
+    }
+
+    function _requireKYC(address account, string memory err) internal view {
+        require(_isKYC(account), err);
+    }
+    
     /// @dev Runs before every `claim` function call.
     function _beforeClaim(
         address,
@@ -323,12 +396,20 @@ contract OseanNFT is
     ) internal virtual override {
         super._beforeTokenTransfers(from, to, startTokenId, quantity);
 
-        // if transfer is restricted on the contract, we still want to allow burning and minting
-        if (!hasRole(transferRole, address(0)) && from != address(0) && to != address(0)) {
-            if (!hasRole(transferRole, from) && !hasRole(transferRole, to)) {
-                revert("!Transfer-Role");
-            }
+        // burn
+        if (to == address(0)) {
+            revert("BURN_DISABLED");
         }
+
+        // mint
+        if (from == address(0)) {
+            _requireKYC(to, "RECIPIENT_NOT_KYC");
+            return;
+        }
+
+        // both sides must be active KYC members
+        _requireKYC(from, "SENDER_NOT_KYC");
+        _requireKYC(to, "RECIPIENT_NOT_KYC");
     }
 
     function _afterTokenTransfers(
@@ -339,6 +420,20 @@ contract OseanNFT is
     ) internal virtual override(ERC721AUpgradeable, ERC721VotesUpgradeable){
         
         super._afterTokenTransfers(from, to, startTokenId, quantity);
+    }
+
+    function approve(address to, uint256 tokenId) public virtual override {
+        if (to != address(0)) {
+            require(approvedOperators[to], "OPERATOR_NOT_APPROVED");
+        }
+        super.approve(to, tokenId);
+    }
+
+    function setApprovalForAll(address operator, bool approved) public virtual override {
+        if (approved) {
+            require(approvedOperators[operator], "OPERATOR_NOT_APPROVED");
+        }
+        super.setApprovalForAll(operator, approved);
     }
 
     function _dropMsgSender() internal view virtual override returns (address) {
