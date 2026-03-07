@@ -21,7 +21,6 @@ import "@thirdweb-dev/contracts/lib/CurrencyTransferLib.sol";
 import "@thirdweb-dev/contracts/extension/ContractMetadata.sol";
 import "@thirdweb-dev/contracts/extension/Royalty.sol";
 import "@thirdweb-dev/contracts/extension/PrimarySale.sol";
-import "@thirdweb-dev/contracts/extension/Ownable.sol";
 import "@thirdweb-dev/contracts/extension/LazyMint.sol";
 import "@thirdweb-dev/contracts/extension/PermissionsEnumerable.sol";
 import "@thirdweb-dev/contracts/extension/Drop.sol";
@@ -30,7 +29,6 @@ contract OseanNFT is
     ContractMetadata,
     Royalty,
     PrimarySale,
-    Ownable,
     LazyMint,
     PermissionsEnumerable,
     Drop,
@@ -47,13 +45,12 @@ contract OseanNFT is
 
     /// @dev Only transfers to or from TRANSFER_ROLE holders are valid, when transfers are restricted.
     bytes32 private transferRole;
+    
     /// @dev Only MINTER_ROLE holders can sign off on `MintRequest`s and lazy mint tokens.
     bytes32 private minterRole;
+    
     /// @dev Only METADATA_ROLE holders can reveal the URI for a batch of delayed reveal NFTs, and update or freeze batch metadata.
     bytes32 private metadataRole;
-
-    /// @dev Max bps in the thirdweb system.
-    uint256 private constant MAX_BPS = 10_000;
 
     /// @dev Global max total supply of NFTs.
     uint256 public maxTotalSupply;
@@ -87,7 +84,6 @@ contract OseanNFT is
         __ERC721Votes_init();
 
         _setupContractURI(_contractURI);
-        _setupOwner(msg.sender);
 
         _setupRole(DEFAULT_ADMIN_ROLE,  msg.sender);
         _setupRole(_minterRole, msg.sender);
@@ -174,6 +170,7 @@ contract OseanNFT is
 
     /// @dev Lets a contract admin set the global maximum supply for collection's NFTs.
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_maxTotalSupply == 0 || _maxTotalSupply >= _currentIndex, "!maxSupply");
         maxTotalSupply = _maxTotalSupply;
         emit MaxTotalSupplyUpdated(_maxTotalSupply);
     }
@@ -214,7 +211,6 @@ contract OseanNFT is
         address saleRecipient = _primarySaleRecipient == address(0) ? primarySaleRecipient() : _primarySaleRecipient;
 
         uint256 totalPrice = _quantityToClaim * _pricePerToken;
-        uint256 platformFees = totalPrice / MAX_BPS;
 
         bool validMsgValue;
         if (_currency == CurrencyTransferLib.NATIVE_TOKEN) {
@@ -224,7 +220,7 @@ contract OseanNFT is
         }
         require(validMsgValue, "!V");
 
-        CurrencyTransferLib.transferCurrency(_currency, _msgSender(), saleRecipient, totalPrice - platformFees);
+        CurrencyTransferLib.transferCurrency(_currency, _msgSender(), saleRecipient, totalPrice);
     }
 
     /// @dev Transfers the NFTs being claimed.
@@ -241,12 +237,7 @@ contract OseanNFT is
     function _canSetPrimarySaleRecipient() internal view override returns (bool) {
         return hasRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
-
-    /// @dev Checks whether owner can be set in the given execution context.
-    function _canSetOwner() internal view override returns (bool) {
-        return hasRole(DEFAULT_ADMIN_ROLE, _msgSender());
-    }
-
+    
     /// @dev Checks whether royalty info can be set in the given execution context.
     function _canSetRoyaltyInfo() internal view override returns (bool) {
         return hasRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -265,6 +256,40 @@ contract OseanNFT is
     /// @dev Returns whether lazy minting can be done in the given execution context.
     function _canLazyMint() internal view virtual override returns (bool) {
         return hasRole(minterRole, _msgSender());
+    }
+
+        /*///////////////////////////////////////////////////////////////
+        DEFAULT ADMIN ROLE OVERRIDES & GUARD AGAINST BRICKING
+    //////////////////////////////////////////////////////////////*/
+
+    function adminCount() public view returns (uint256) {
+        return _adminCount();
+    }
+
+    function _adminCount() internal view returns (uint256) {
+        return IPermissionsEnumerable(address(this)).getRoleMemberCount(DEFAULT_ADMIN_ROLE);
+    }
+    
+    function renounceRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+    {
+        if (role == DEFAULT_ADMIN_ROLE && hasRole(DEFAULT_ADMIN_ROLE, account)) {
+            require(_adminCount() >= 2, "LAST_ADMIN");
+        }
+
+        super.renounceRole(role, account);
+    }
+
+    function revokeRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+    {
+        if (role == DEFAULT_ADMIN_ROLE && hasRole(DEFAULT_ADMIN_ROLE, account)) {
+            require(_adminCount() >= 2, "LAST_ADMIN");
+        }
+
+        super.revokeRole(role, account);
     }
 
     /*///////////////////////////////////////////////////////////////
