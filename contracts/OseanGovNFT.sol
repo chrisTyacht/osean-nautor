@@ -71,7 +71,7 @@ contract OseanNFT is
         address _saleRecipient,
         address _royaltyRecipient,
         uint128 _royaltyBps
-    ) {
+    ) initializer {
         require(_saleRecipient != address(0), "saleRecipient = zero");
         require(_royaltyRecipient != address(0), "royaltyRecipient = zero");
 

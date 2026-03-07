@@ -83,7 +83,7 @@ contract OseanDao is
         uint256 _initialVotingPeriod,
         uint256 _initialProposalThreshold,
         uint256 _initialVoteQuorumFraction
-    ) {
+    ) initializer {
         require(_token != address(0), "token = zero");
         require(_uniswapRouterAddress != address(0), "router = zero");
         require(_nautor != address(0), "nautor = zero");
