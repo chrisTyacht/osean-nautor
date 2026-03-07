@@ -193,8 +193,10 @@ contract OseanDao is
     }
 
     function swapNAUForETH(uint256 amount) private {
-        IERC20 nautorToken = IERC20(nautor);
+        require(amount > 0, "amount = 0");
 
+        IERC20 nautorToken = IERC20(nautor);
+        nautorToken.approve(address(uniswapRouter), 0);
         nautorToken.approve(address(uniswapRouter), amount);
 
         address[] memory path = new address[](2);
@@ -217,7 +219,7 @@ contract OseanDao is
     function swapETHForNAU(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = uniswapRouter.WETH();
-        path[1] = address(nautor); // Replace with the NAU token address on ETH
+        path[1] = address(nautor);
 
         uniswapRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
             0,
@@ -234,7 +236,7 @@ contract OseanDao is
     function swapETHForUSDT(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = uniswapRouter.WETH();
-        path[1] = address(usdt); // Replace with the USDT token address on ETH
+        path[1] = address(usdt);
 
         uniswapRouter.swapExactETHForTokens{value: amount}(
             0,
@@ -244,8 +246,29 @@ contract OseanDao is
         );
     }
 
-    function swapUSDT(uint256 amount) external onlyGovernance {
+    function swapEforU(uint256 amount) external onlyGovernance {
         swapETHForUSDT(amount);
+    }
+
+    function swapUSDTForETH(uint256 amount) private {
+        address[] memory path = new address[](2);
+        path[0] = usdt;
+        path[1] = uniswapRouter.WETH();
+
+        IERC20(usdt).approve(address(uniswapRouter), 0);
+        IERC20(usdt).approve(address(uniswapRouter), amount);
+
+        uniswapRouter.swapExactTokensForETH(
+            amount,
+            0,
+            path,
+            address(this),
+            block.timestamp
+        );
+    }
+
+    function swapUforE(uint256 amount) external onlyGovernance {
+        swapUSDTForETH(amount);
     }
 
 
