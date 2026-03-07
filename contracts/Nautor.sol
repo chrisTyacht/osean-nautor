@@ -118,7 +118,7 @@ contract Nautor is ERC20, Ownable, PermissionsEnumerable {
     uint256 public swapTokensAtAmount;
 
     // Threshold (in ETH) before auto-dispersing to wallets; set to 0 to disable auto-disperse and rely on manual disperse
-    uint256 public autoDisperseThreshold = 0.05 ether;
+    uint256 public autoDisperseThreshold = 0.25 ether;
 
     // Optional cap to reduce price impact (0 = no cap)
     uint256 public maxSwapTokens;

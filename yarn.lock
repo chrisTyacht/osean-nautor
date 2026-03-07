@@ -1464,7 +1464,7 @@
     "@sinonjs/commons" "^3.0.1"
     type-detect "^4.1.0"
 
-"@thirdweb-dev/contracts@^3.8.0":
+"@thirdweb-dev/contracts@^3.15.0":
   version "3.15.0"
   resolved "https://registry.yarnpkg.com/@thirdweb-dev/contracts/-/contracts-3.15.0.tgz#2d8dd4f6f2ec93dc22ae5b60240379bcc2f7d37a"
   integrity sha512-sIXPy6zNqW9K9h8xgCnsRQVrqmmMdxoDqut4eAZj1CJzMax5TyrNBoSYCfAX0et8KApvBeCVeJQhUHSWpBNIVw==

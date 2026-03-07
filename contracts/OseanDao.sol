@@ -25,7 +25,6 @@ import "@thirdweb-dev/contracts/external-deps/openzeppelin/metatx/ERC2771Context
 
 
 contract OseanDao is
-    Initializable,
     IThirdwebContract,
     ERC2771ContextUpgradeable,
     GovernorUpgradeable,
@@ -67,6 +66,11 @@ contract OseanDao is
     // Uniswap router interface.
     IUniswapV2Router02 private uniswapRouter;
 
+    event ContractURIUpdated(string prevURI, string newURI);
+    event NautorAddressUpdated(address indexed prevNautor, address indexed newNautor);
+    event UsdtAddressUpdated(address indexed prevUsdt, address indexed newUsdt);
+    event UniswapRouterUpdated(address indexed prevRouter, address indexed newRouter);
+
     constructor(
         string memory _name,
         string memory _contractURI,
@@ -79,48 +83,31 @@ contract OseanDao is
         uint256 _initialVotingPeriod,
         uint256 _initialProposalThreshold,
         uint256 _initialVoteQuorumFraction
-    ) initializer {
-        // Initialize inherited contracts, most base-like -> most derived.
+    ) {
+        require(_token != address(0), "token = zero");
+        require(_uniswapRouterAddress != address(0), "router = zero");
+        require(_nautor != address(0), "nautor = zero");
+        require(_usdt != address(0), "usdt = zero");
+
         __ERC2771Context_init(_trustedForwarders);
         __Governor_init(_name);
-        __GovernorSettings_init(_initialVotingDelay, _initialVotingPeriod, _initialProposalThreshold);
+        __GovernorSettings_init(
+            _initialVotingDelay,
+            _initialVotingPeriod,
+            _initialProposalThreshold
+        );
         __GovernorVotes_init(IVotesUpgradeable(_token));
         __GovernorVotesQuorumFraction_init(_initialVoteQuorumFraction);
-        
+
+        contractURI = _contractURI;
         nautor = _nautor;
-        usdt =_usdt;
-
+        usdt = _usdt;
         uniswapRouterAddress = _uniswapRouterAddress;
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(uniswapRouterAddress);
-        uniswapRouter = _uniswapV2Router;
+        uniswapRouter = IUniswapV2Router02(_uniswapRouterAddress);
 
-        // Initialize this contract's state.
-        contractURI = _contractURI;
-
+        _disableInitializers();
     }
-    
-    // @dev Initializes the contract, like a constructor.
-    function initialize(
-        string memory _name,
-        string memory _contractURI,
-        address[] memory _trustedForwarders,
-        address _token,
-        uint256 _initialVotingDelay,
-        uint256 _initialVotingPeriod,
-        uint256 _initialProposalThreshold,
-        uint256 _initialVoteQuorumFraction
-    ) external initializer {
-        // Initialize inherited contracts, most base-like -> most derived.
-        __ERC2771Context_init(_trustedForwarders);
-        __Governor_init(_name);
-        __GovernorSettings_init(_initialVotingDelay, _initialVotingPeriod, _initialProposalThreshold);
-        __GovernorVotes_init(IVotesUpgradeable(_token));
-        __GovernorVotesQuorumFraction_init(_initialVoteQuorumFraction);
-
-        // Initialize this contract's state.
-        contractURI = _contractURI;
-    }
-
+        
     // @dev Returns the module type of the contract.
     function contractType() external pure returns (bytes32) {
         return MODULE_TYPE;
@@ -168,6 +155,7 @@ contract OseanDao is
     }
 
     function setContractURI(string calldata uri) external onlyGovernance {
+        emit ContractURIUpdated(contractURI, uri);
         contractURI = uri;
     }
 
@@ -208,7 +196,6 @@ contract OseanDao is
         IERC20 nautorToken = IERC20(nautor);
 
         nautorToken.approve(address(uniswapRouter), amount);
-
 
         address[] memory path = new address[](2);
         path[0] = address(nautorToken);
@@ -264,11 +251,21 @@ contract OseanDao is
 
      // Function to change the NAU token address
     function setNautorAddress(address _newNautor) public onlyGovernance {
+        require(_newNautor != address(0), "nautor = zero");
+        emit NautorAddressUpdated(nautor, _newNautor);
         nautor = _newNautor;
+    }
+
+    function setUsdtAddress(address _newUsdt) external onlyGovernance {
+        require(_newUsdt != address(0), "usdt = zero");
+        emit UsdtAddressUpdated(usdt, _newUsdt);
+        usdt = _newUsdt;
     }
 
     // Function to change the Uniswap Router address
     function setUniswapRouterAddress(address _newRouter) public onlyGovernance {
+        require(_newRouter != address(0), "router = zero");
+        emit UniswapRouterUpdated(uniswapRouterAddress, _newRouter);
         uniswapRouterAddress = _newRouter;
         uniswapRouter = IUniswapV2Router02(_newRouter);
     }

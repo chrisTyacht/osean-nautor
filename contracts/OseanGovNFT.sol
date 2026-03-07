@@ -27,7 +27,6 @@ import "@thirdweb-dev/contracts/extension/PermissionsEnumerable.sol";
 import "@thirdweb-dev/contracts/extension/Drop.sol";
 
 contract OseanNFT is
-    Initializable,
     ContractMetadata,
     Royalty,
     PrimarySale,
@@ -76,21 +75,23 @@ contract OseanNFT is
         address _saleRecipient,
         address _royaltyRecipient,
         uint128 _royaltyBps
-    ) initializer {
+    ) {
+        require(_defaultAdmin != address(0), "admin = zero");
+        require(_saleRecipient != address(0), "saleRecipient = zero");
+        require(_royaltyRecipient != address(0), "royaltyRecipient = zero");
+
         bytes32 _transferRole = keccak256("TRANSFER_ROLE");
         bytes32 _minterRole = keccak256("MINTER_ROLE");
         bytes32 _metadataRole = keccak256("METADATA_ROLE");
 
-        // Initialize inherited contracts, most base-like -> most derived.
         __ERC2771Context_init(_trustedForwarders);
         __ERC721A_init(_name, _symbol);
         __ERC721Votes_init();
 
-
         _setupContractURI(_contractURI);
         _setupOwner(_defaultAdmin);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _setupRole(_minterRole, _defaultAdmin);
         _setupRole(_transferRole, _defaultAdmin);
         _setupRole(_transferRole, address(0));

@@ -11,7 +11,7 @@
     "hardhat": "^2.19.1"
   },
   "dependencies": {
-    "@thirdweb-dev/contracts": "^3.8.0",
+    "@thirdweb-dev/contracts": "^3.15.0",
     "zksync-ethers": "^5.7.0"
   }
 }
