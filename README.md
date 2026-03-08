@@ -311,9 +311,28 @@ yarn deploy
 
 # License
 
-Apache-2.0
+The OSEAN DAO smart contracts are licensed under the **Business Source License 1.1 (BUSL-1.1)**.
+
+Copyright (c) 2025 **OSEAN DAO LLC**.
+
+The source code is publicly visible for transparency and auditing purposes, but
+commercial use of this software — including deployment of derivative protocols
+or competing systems based on this code — requires explicit written permission
+from **OSEAN DAO LLC**.
+
+After the Change Date defined in the LICENSE file, the software will convert
+to the **GNU General Public License (GPL v2.0 or later)**.
+
+See the `LICENSE` file in this repository for full terms.
 
 ---
+
+# Trademark Notice
+
+OSEAN, OSEAN DAO, NAUTOR and NAU are trademarks or brand assets of
+**OSEAN DAO LLC**.
+
+Unauthorized use of these marks is prohibited.
 
 # Official Links
 
