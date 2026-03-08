@@ -1,9 +1,23 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
 /*
-    The Official token of OSEAN DAO - https://nautortoken.com - https://osean.online exclusively on Ethereum mainnet
-    Nautor (NAU) — Ethereum mainnet Uniswap V2 fee token (auto-swap + auto-distribute)
+    Nautor (NAU) — Official utility token of OSEAN DAO
+    https://nautortoken.com
+    https://osean.online
+
+    Copyright (c) 2025 OSEAN DAO LLC
+
+    Use of this software is governed by the Business Source License 1.1
+    included in the LICENSE file of this repository.
+
+    Commercial use of this software, including deployment of derivative
+    token contracts or competing protocols based on this code, requires
+    explicit written permission from OSEAN DAO LLC.
+
+    Nautor, NAU, OSEAN, and OSEAN DAO are associated with the OSEAN DAO ecosystem and are trademarks or brand assets of OSEAN DAO LLC.
+
+    The Official token of OSEAN DAO exclusively on Ethereum mainnet.
 
     Behavior:
     - Charges buyTax (default 2%) on buys and sellTax (default 2%) on sells ONLY when interacting with the Uniswap V2 pair

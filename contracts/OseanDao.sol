@@ -1,15 +1,17 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.11;
 
 /**
  * @title OSEAN DAO Governance Contract
- * @author OSEAN DAO LLC
+ * @author OSEAN DAO LLC - OSEAN, OSEAN DAO and NAUTOR are trademarks or brand assets of OSEAN DAO LLC.
  *
  * @notice
  * Official on-chain governance contract for the OSEAN DAO.
  * THIS IS THE OFFICIAL OSEAN DAO GOVERNANCE CONTRACT - https://osean.online & https://oseandao.com
  *
  * @dev
+ * Copyright (c) 2025 OSEAN DAO LLC.
+ *
  * This contract is based on OpenZeppelin GovernorUpgradeable and uses
  * ERC2771 meta-transactions. Voting power is derived from an external
  * IVotes-compatible governance token, which in the OSEAN system is the

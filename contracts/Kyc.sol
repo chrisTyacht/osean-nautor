@@ -1,17 +1,19 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.11;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
  * @title OSEAN DAO KYC Registry
- * @author OSEAN - https://osean.online & https://oseandao.com
+ * @author OSEAN DAO LLC - OSEAN, OSEAN DAO and NAUTOR are trademarks or brand assets of OSEAN DAO LLC.
  *
  * @notice
  * Minimal on-chain registry used to verify whether a wallet address has
  * passed KYC and is allowed to hold governance NFTs.
  *
  * @dev
+ * Copyright (c) 2025 OSEAN DAO LLC.
+ *
  * This contract intentionally stores the smallest possible amount of data
  * to respect privacy and GDPR principles. No personal information is stored
  * on-chain. Only a boolean flag indicating whether a wallet is KYC-approved

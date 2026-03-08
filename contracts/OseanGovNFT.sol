@@ -1,15 +1,17 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.11;
 
 /**
  * @title OSEAN DAO Governance NFT
- * @author OSEAN DAO LLC
+ * @author OSEAN DAO LLC - OSEAN, OSEAN DAO and NAUTOR are trademarks or brand assets of OSEAN DAO LLC.
  *
  * @notice
  * Governance NFT contract used by the OSEAN DAO to represent verified DAO
  * membership and voting power - https://osean.online & https://oseandao.com
  *
  * @dev
+ * Copyright (c) 2025 OSEAN DAO LLC.
+ *
  * This contract is based on Thirdweb's DropERC721 implementation with
  * additional governance and compliance features:
  *
@@ -230,18 +232,6 @@ contract OseanNFT is
         require(operator != address(0), "operator=0");
         approvedOperators[operator] = approved;
         emit ApprovedOperatorUpdated(operator, approved);
-    }
-
-    function getApproved(uint256 tokenId) public view virtual override returns (address) {
-        address operator = super.getApproved(tokenId);
-        return approvedOperators[operator] ? operator : address(0);
-    }
-
-    function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
-        if (!approvedOperators[operator]) {
-            return false;
-        }
-        return super.isApprovedForAll(owner, operator);
     }
 
     /*///////////////////////////////////////////////////////////////
