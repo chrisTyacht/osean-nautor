@@ -85,6 +85,9 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
+    // O(1) DAO role count to avoid expensive enumerable scans
+    uint256 private _daoRoleCount;
+
     // Example role-based access control modifiers
     modifier onlyDao() {
         require(hasRole(DAO_ROLE, msg.sender), "NOT_DAO");
@@ -245,6 +248,7 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
 
         // set initial DAO + manager at launch
         _setupRole(DAO_ROLE, _daoRoleHolder);
+        _daoRoleCount = 1;
         _setupRole(MANAGER_ROLE, _managerRoleHolder);
         manager = _managerRoleHolder;
 
@@ -267,42 +271,117 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
     }
 
     // --- Role management with DAO revoke protection ---
-    function renounceRole(bytes32 role, address account) public override(Permissions, IPermissions) {
-        if (role == DAO_ROLE && hasRole(DAO_ROLE, account)) {
-            require(_daoMemberCount() >= 2, "DAO_LAST_RENOUNCE");
-        }
 
-        super.renounceRole(role, account);
+    function grantRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+        onlyRole(DAO_ROLE){
+
+        require(account != address(0), "ROLE_ZERO_ADDRESS");
+        require(role != MANAGER_ROLE, "USE_SET_MANAGER");
+
+        bool alreadyHadRole = hasRole(role, account);
+        super.grantRole(role, account);
+
+        if (!alreadyHadRole) {
+            if (role == DAO_ROLE) {
+                unchecked {
+                    _daoRoleCount += 1;
+                }
+            }
+
+            if (role == DAO_ROLE || role == MANAGER_ROLE) {
+                _syncFeeExclusion(account);
+            }
+        }
     }
 
-    function revokeRole(bytes32 role, address account) public override(Permissions, IPermissions) {
+    function revokeRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+        onlyRole(DAO_ROLE)
+    {
         if (role == DAO_ROLE && hasRole(DAO_ROLE, account)) {
-            // Disallow revoking if it would leave 0 DAO members.
-            // Require at least 2 DAO_ROLE members before any revoke.
-            require(_daoMemberCount() >= 2, "DAO_MIN_1");
+            require(_daoRoleCount >= 2, "DAO_MIN_1");
         }
 
+        bool hadRole = hasRole(role, account);
+
         super.revokeRole(role, account);
+
+        if (hadRole) {
+            if (role == DAO_ROLE) {
+                unchecked {
+                    _daoRoleCount -= 1;
+                }
+            }
+
+            if (role == MANAGER_ROLE && manager == account) {
+                manager = address(0);
+                emit ManagerUpdated(account, address(0));
+            }
+
+            if (role == DAO_ROLE || role == MANAGER_ROLE) {
+                _syncFeeExclusion(account);
+            }
+        }
+    }
+
+    function renounceRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+    {
+        if (
+            role == DAO_ROLE &&
+            account == msg.sender &&
+            hasRole(DAO_ROLE, account)
+        ) {
+            require(_daoRoleCount >= 2, "DAO_LAST_RENOUNCE");
+        }
+
+        bool hadRole = hasRole(role, account);
+
+        super.renounceRole(role, account);
+
+        if (hadRole && account == msg.sender) {
+            if (role == DAO_ROLE) {
+                unchecked {
+                    _daoRoleCount -= 1;
+                }
+            }
+
+            if (role == MANAGER_ROLE && manager == account) {
+                manager = address(0);
+                emit ManagerUpdated(account, address(0));
+            }
+
+            if (role == DAO_ROLE || role == MANAGER_ROLE) {
+                _syncFeeExclusion(account);
+            }
+        }
     }
 
     // --- DAO-only manager rotation ---
+
+    // DAO can rotate manager
     function setManager(address newManager) external onlyDao {
         require(newManager != address(0), "MANAGER_ZERO");
 
         address old = manager;
 
-        if (old != address(0) && old != newManager && hasRole(MANAGER_ROLE, old)) {
-            revokeRole(MANAGER_ROLE, old);
-            _setExcludedFromFees(old, false);
+        if (old == newManager) return;
+
+        if (old != address(0) && hasRole(MANAGER_ROLE, old)) {
+            super.revokeRole(MANAGER_ROLE, old);
+            _syncFeeExclusion(old);
         }
 
         if (!hasRole(MANAGER_ROLE, newManager)) {
-            grantRole(MANAGER_ROLE, newManager);
+            super.grantRole(MANAGER_ROLE, newManager);
+            _syncFeeExclusion(newManager);
         }
 
         manager = newManager;
-        _setExcludedFromFees(newManager, true);
-
         emit ManagerUpdated(old, newManager);
     }
 
@@ -310,12 +389,6 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
     function resignManager() external {
         require(hasRole(MANAGER_ROLE, msg.sender), "NOT_MANAGER");
         renounceRole(MANAGER_ROLE, msg.sender);
-        if (manager == msg.sender) {
-            manager = address(0);
-            emit ManagerUpdated(msg.sender, address(0));           
-        }
-
-        _setExcludedFromFees(msg.sender, false);
     }
 
     // --- DAO and Manager config setters ---
@@ -363,19 +436,40 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
         daoWalletAddress = newDao;
 
         // keep them excluded by default (optional but practical)
-        _setExcludedFromFees(newNautor, true);
-        _setExcludedFromFees(newDao, true);
+        _syncFeeExclusion(oldN);
+        _syncFeeExclusion(oldD);
+        _syncFeeExclusion(newNautor);
+        _syncFeeExclusion(newDao);
 
         emit FeeWalletsUpdated(oldN, newNautor, oldD, newDao);
     }
 
     // --- Fee exclusion management ---
 
+    function _syncFeeExclusion(address account) internal {
+        bool shouldBeExcluded =
+            account == address(this) ||
+            account == nautorWalletAddress ||
+            account == daoWalletAddress ||
+            hasRole(DAO_ROLE, account) ||
+            hasRole(MANAGER_ROLE, account);
+
+        _setExcludedFromFees(account, shouldBeExcluded);
+    }
+
     function excludeUserFromFees(address user) external onlyDaoOrManager {
         _setExcludedFromFees(user, true);
     }
 
     function includeUsersInFees(address user) external onlyDaoOrManager {
+        require(
+            user != address(this) &&
+            user != nautorWalletAddress &&
+            user != daoWalletAddress &&
+            !hasRole(DAO_ROLE, user) &&
+            !hasRole(MANAGER_ROLE, user),
+            "PROTECTED_ADDRESS"
+        );
         _setExcludedFromFees(user, false);
     }
 
@@ -386,11 +480,11 @@ contract Nautor is ERC20, PermissionsEnumerable, ReentrancyGuard {
 
     // --- Utility / testing helpers ---
     function daoMemberCount() public view returns (uint256) {
-        return _daoMemberCount();
+        return _daoRoleCount;
     }
 
     function _daoMemberCount() internal view returns (uint256) {
-        return IPermissionsEnumerable(address(this)).getRoleMemberCount(DAO_ROLE);
+        return _daoRoleCount;
     }
 
     function getContractAddress() external view returns (address) {

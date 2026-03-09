@@ -46,6 +46,10 @@ pragma solidity ^0.8.20;
 import "@thirdweb-dev/contracts/extension/PermissionsEnumerable.sol";
 
 contract KYCRegistry is PermissionsEnumerable {
+    /// @dev O(1) DEFAULT_ADMIN_ROLE count used for anti-bricking protection.
+    ///      This avoids relying on enumerable role scans for safety-critical logic.
+    uint256 private _adminRoleCount;
+
     bytes32 public constant KYC_MANAGER_ROLE = keccak256("KYC_MANAGER_ROLE");
 
     mapping(address => bool) private _kyc;
@@ -77,6 +81,8 @@ contract KYCRegistry is PermissionsEnumerable {
         if (initialManager == address(0)) revert ZeroAddress();
 
         _setupRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
+        // Track admin count explicitly instead of relying on role enumeration.
+        _adminRoleCount = 1;        
 
         // Only DEFAULT_ADMIN_ROLE can manage manager role
         _setRoleAdmin(KYC_MANAGER_ROLE, DEFAULT_ADMIN_ROLE);
@@ -90,14 +96,11 @@ contract KYCRegistry is PermissionsEnumerable {
     //////////////////////////////////////////////////////////////*/
 
     function adminMemberCount() public view returns (uint256) {
-        return _adminMemberCount();
+        return _adminRoleCount;
     }
 
     function _adminMemberCount() internal view returns (uint256) {
-        return
-            IPermissionsEnumerable(address(this)).getRoleMemberCount(
-                DEFAULT_ADMIN_ROLE
-            );
+        return _adminRoleCount;
     }
 
     function grantRole(bytes32 role, address account)
@@ -105,7 +108,18 @@ contract KYCRegistry is PermissionsEnumerable {
         override(Permissions, IPermissions)
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
+        require(account != address(0), "ROLE_ZERO_ADDRESS");
+        require(role != KYC_MANAGER_ROLE, "USE_SET_MANAGER");
+
+        bool alreadyHadRole = hasRole(role, account);
+
         super.grantRole(role, account);
+
+        if (!alreadyHadRole && role == DEFAULT_ADMIN_ROLE) {
+            unchecked {
+                _adminRoleCount += 1;
+            }
+        }
     }
 
     function revokeRole(bytes32 role, address account)
@@ -117,7 +131,22 @@ contract KYCRegistry is PermissionsEnumerable {
             require(_adminMemberCount() >= 2, "ADMIN_MIN_1");
         }
 
+        bool hadRole = hasRole(role, account);
+
         super.revokeRole(role, account);
+
+        if (hadRole) {
+            if (role == DEFAULT_ADMIN_ROLE) {
+                unchecked {
+                    _adminRoleCount -= 1;
+                }
+            }
+
+            if (role == KYC_MANAGER_ROLE && manager == account) {
+                manager = address(0);
+                emit KYCManagerUpdated(account, address(0));
+            }
+        }
     }
 
     function renounceRole(bytes32 role, address account)
@@ -132,7 +161,22 @@ contract KYCRegistry is PermissionsEnumerable {
             require(_adminMemberCount() >= 2, "ADMIN_LAST_RENOUNCE");
         }
 
+        bool hadRole = hasRole(role, account);
+
         super.renounceRole(role, account);
+
+        if (hadRole && account == msg.sender) {
+            if (role == DEFAULT_ADMIN_ROLE) {
+                unchecked {
+                    _adminRoleCount -= 1;
+                }
+            }
+
+            if (role == KYC_MANAGER_ROLE && manager == account) {
+                manager = address(0);
+                emit KYCManagerUpdated(account, address(0));
+            }
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -144,16 +188,17 @@ contract KYCRegistry is PermissionsEnumerable {
 
         address old = manager;
 
+        if (old == newManager) return;
+
         if (
             old != address(0) &&
-            old != newManager &&
             hasRole(KYC_MANAGER_ROLE, old)
         ) {
-            revokeRole(KYC_MANAGER_ROLE, old);
+            super.revokeRole(KYC_MANAGER_ROLE, old);
         }
 
         if (!hasRole(KYC_MANAGER_ROLE, newManager)) {
-            grantRole(KYC_MANAGER_ROLE, newManager);
+            super.grantRole(KYC_MANAGER_ROLE, newManager);
         }
 
         manager = newManager;
@@ -162,13 +207,7 @@ contract KYCRegistry is PermissionsEnumerable {
 
     function resignManager() external {
         require(hasRole(KYC_MANAGER_ROLE, msg.sender), "NOT_MANAGER");
-
         renounceRole(KYC_MANAGER_ROLE, msg.sender);
-
-        if (manager == msg.sender) {
-            manager = address(0);
-            emit KYCManagerUpdated(msg.sender, address(0));
-        }
     }
 
     /*//////////////////////////////////////////////////////////////

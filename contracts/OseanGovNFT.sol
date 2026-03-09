@@ -76,6 +76,10 @@ contract OseanNFT is
     /*///////////////////////////////////////////////////////////////
                             State variables
     //////////////////////////////////////////////////////////////*/
+
+    /// @dev O(1) DEFAULT_ADMIN_ROLE count to avoid relying on enumerable scans / external enumeration logic.
+    /// This is used for anti-bricking protection so the contract can never lose its last usable admin.
+    uint256 private _adminRoleCount;
     
     /// @dev Only MINTER_ROLE holders can sign off on `MintRequest`s and lazy mint tokens.
     bytes32 private minterRole;
@@ -126,6 +130,9 @@ contract OseanNFT is
         _setupContractURI(_contractURI);
 
         _setupRole(DEFAULT_ADMIN_ROLE,  msg.sender);
+        // Track admin count explicitly instead of relying on PermissionsEnumerable role enumeration.
+        _adminRoleCount = 1;
+
         _setupRole(_minterRole, msg.sender);
         _setupRole(_metadataRole, msg.sender);
         _setRoleAdmin(_metadataRole, _metadataRole);
@@ -216,6 +223,7 @@ contract OseanNFT is
     }
 
     function addAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newAdmin != address(0), "ADMIN_ZERO");
         grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
     }
 
@@ -325,34 +333,81 @@ contract OseanNFT is
         DEFAULT ADMIN ROLE OVERRIDES & GUARD AGAINST BRICKING
     //////////////////////////////////////////////////////////////*/
 
+    /// @dev Returns the tracked number of DEFAULT_ADMIN_ROLE holders.
+    ///      Uses an O(1) counter rather than role enumeration for safety-critical logic.
     function adminCount() public view returns (uint256) {
-        return _adminCount();
+        return _adminRoleCount;
     }
 
     function _adminCount() internal view returns (uint256) {
-        return IPermissionsEnumerable(address(this)).getRoleMemberCount(DEFAULT_ADMIN_ROLE);
+        return _adminRoleCount;
+    }
+
+    function grantRole(bytes32 role, address account)
+        public
+        override(Permissions, IPermissions)
+    {
+        require(account != address(0), "ROLE_ZERO_ADDRESS");
+
+        bool alreadyHadRole = hasRole(role, account);
+
+        super.grantRole(role, account);
+
+        if (!alreadyHadRole && role == DEFAULT_ADMIN_ROLE) {
+            unchecked {
+                _adminRoleCount += 1;
+            }
+        }
     }
     
     function renounceRole(bytes32 role, address account)
         public
         override(Permissions, IPermissions)
     {
-        if (role == DEFAULT_ADMIN_ROLE && hasRole(DEFAULT_ADMIN_ROLE, account)) {
+        // Protect against losing the final admin. Renounce is self-only, so only
+        // apply this guard when the caller is renouncing their own admin role.
+        if (
+            role == DEFAULT_ADMIN_ROLE &&
+            account == _msgSender() &&
+            hasRole(DEFAULT_ADMIN_ROLE, account)
+        ) {
             require(_adminCount() >= 2, "LAST_ADMIN");
         }
 
-        super.renounceRole(role, account);
-    }
+        bool hadRole = hasRole(role, account);
 
+        super.renounceRole(role, account);
+
+        if (
+            hadRole &&
+            role == DEFAULT_ADMIN_ROLE &&
+            account == _msgSender()
+        ) {
+            unchecked {
+                _adminRoleCount -= 1;
+            }
+        }
+    }
+    
     function revokeRole(bytes32 role, address account)
         public
         override(Permissions, IPermissions)
     {
+        // Protect against removing the final admin and permanently bricking
+        // admin-controlled functionality.
         if (role == DEFAULT_ADMIN_ROLE && hasRole(DEFAULT_ADMIN_ROLE, account)) {
             require(_adminCount() >= 2, "LAST_ADMIN");
         }
 
+        bool hadRole = hasRole(role, account);
+
         super.revokeRole(role, account);
+
+        if (hadRole && role == DEFAULT_ADMIN_ROLE) {
+            unchecked {
+                _adminRoleCount -= 1;
+            }
+        }
     }
 
     /*///////////////////////////////////////////////////////////////
