@@ -12,9 +12,8 @@ pragma solidity ^0.8.11;
  * @dev
  * Copyright (c) 2025 OSEAN DAO LLC.
  *
- * This contract is based on OpenZeppelin GovernorUpgradeable and uses
- * ERC2771 meta-transactions. Voting power is derived from an external
- * IVotes-compatible governance token, which in the OSEAN system is the
+ * This contract is based on OpenZeppelin Governor. Voting power is derived from an external
+ * IVotes-compatible governance token, which in the OSEAN ecosystem is the
  * KYC-restricted governance NFT.
  *
  * Main features:
@@ -22,7 +21,6 @@ pragma solidity ^0.8.11;
  * - Quorum-based execution
  * - Governor settings (delay, period, threshold)
  * - Treasury actions controlled only through governance
- * - Meta-transaction support
  *
  * Treasury functions currently include token/ETH swap operations through
  * a Uniswap V2-compatible router. These functions are restricted to
@@ -33,29 +31,24 @@ pragma solidity ^0.8.11;
 import "@thirdweb-dev/contracts/infra/interface/IThirdwebContract.sol";
 
 // Governance
-import "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/governance/utils/IVotesUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
+import "@openzeppelin/contracts/governance/Governor.sol";
+import "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 
 // Interfaces
 import "./interfaces/Uniswap.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-// Meta transactions
-import "@thirdweb-dev/contracts/external-deps/openzeppelin/metatx/ERC2771ContextUpgradeable.sol";
-
-
 contract OseanDao is
     IThirdwebContract,
-    ERC2771ContextUpgradeable,
-    GovernorUpgradeable,
-    GovernorSettingsUpgradeable,
-    GovernorCountingSimpleUpgradeable,
-    GovernorVotesUpgradeable,
-    GovernorVotesQuorumFractionUpgradeable
+    Governor,
+    GovernorSettings,
+    GovernorCountingSimple,
+    GovernorVotes,
+    GovernorVotesQuorumFraction
 {
     bytes32 private constant MODULE_TYPE = bytes32("VoteERC721");
     uint256 private constant VERSION = 1;
@@ -68,12 +61,14 @@ contract OseanDao is
         address proposer;
         address[] targets;
         uint256[] values;
-        string[] signatures;
         bytes[] calldatas;
         uint256 startBlock;
         uint256 endBlock;
         string description;
     }
+
+    mapping(uint256 => uint256) public proposalIdToIndex;
+    
 
     // @dev proposal index => Proposal
     mapping(uint256 => Proposal) public proposals;
@@ -98,7 +93,6 @@ contract OseanDao is
     constructor(
         string memory _name,
         string memory _contractURI,
-        address[] memory _trustedForwarders,
         address _token,
         address _uniswapRouterAddress,
         address _nautor,
@@ -107,29 +101,26 @@ contract OseanDao is
         uint256 _initialVotingPeriod,
         uint256 _initialProposalThreshold,
         uint256 _initialVoteQuorumFraction
-    ) initializer {
+    )        
+        Governor(_name)
+        GovernorSettings(
+            _initialVotingDelay,
+            _initialVotingPeriod,
+            _initialProposalThreshold
+        )
+        GovernorVotes(IVotes(_token))
+        GovernorVotesQuorumFraction(_initialVoteQuorumFraction)
+    {
         require(_token != address(0), "token = zero");
         require(_uniswapRouterAddress != address(0), "router = zero");
         require(_nautor != address(0), "nautor = zero");
         require(_usdt != address(0), "usdt = zero");
-
-        __ERC2771Context_init(_trustedForwarders);
-        __Governor_init(_name);
-        __GovernorSettings_init(
-            _initialVotingDelay,
-            _initialVotingPeriod,
-            _initialProposalThreshold
-        );
-        __GovernorVotes_init(IVotesUpgradeable(_token));
-        __GovernorVotesQuorumFraction_init(_initialVoteQuorumFraction);
 
         contractURI = _contractURI;
         nautor = _nautor;
         usdt = _usdt;
         uniswapRouterAddress = _uniswapRouterAddress;
         uniswapRouter = IUniswapV2Router02(_uniswapRouterAddress);
-
-        _disableInitializers();
     }
         
     // @dev Returns the module type of the contract.
@@ -158,13 +149,13 @@ contract OseanDao is
             proposer: _msgSender(),
             targets: targets,
             values: values,
-            signatures: new string[](targets.length),
             calldatas: calldatas,
             startBlock: proposalSnapshot(proposalId),
             endBlock: proposalDeadline(proposalId),
             description: description
         });
 
+        proposalIdToIndex[proposalId] = proposalIndex;
         proposalIndex += 1;
     }
 
@@ -178,6 +169,45 @@ contract OseanDao is
         }
     }
 
+    function getProposalById(uint256 proposalId)
+        external
+        view
+        returns (Proposal memory)
+    {
+        uint256 index = proposalIdToIndex[proposalId];
+        require(index < proposalIndex, "invalid proposal id");
+        require(proposals[index].proposalId == proposalId, "proposal not found");
+        return proposals[index];
+    }
+
+    function getProposalCount() external view returns (uint256) {
+        return proposalIndex;
+    }
+
+    function getProposals(uint256 offset, uint256 limit)
+        external
+        view
+        returns (Proposal[] memory page)
+    {
+        uint256 total = proposalIndex;
+
+        if (offset >= total) {
+            return new Proposal[](0);
+        }
+
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+
+        uint256 size = end - offset;
+        page = new Proposal[](size);
+
+        for (uint256 i = 0; i < size; i++) {
+            page[i] = proposals[offset + i];
+        }
+    }
+
     function setContractURI(string calldata uri) external onlyGovernance {
         emit ContractURIUpdated(contractURI, uri);
         contractURI = uri;
@@ -186,34 +216,41 @@ contract OseanDao is
     function proposalThreshold()
         public
         view
-        override(GovernorUpgradeable, GovernorSettingsUpgradeable)
+        override(Governor, GovernorSettings)
         returns (uint256)
     {
-        return GovernorSettingsUpgradeable.proposalThreshold();
+        return GovernorSettings.proposalThreshold();
+    }
+
+    function votingDelay()
+        public
+        view
+        override(IGovernor, GovernorSettings)
+        returns (uint256)
+    {
+        return super.votingDelay();
+    }
+
+    function votingPeriod()
+        public
+        view
+        override(IGovernor, GovernorSettings)
+        returns (uint256)
+    {
+        return super.votingPeriod();
+    }
+
+    function quorum(uint256 blockNumber)
+        public
+        view
+        override(IGovernor, GovernorVotesQuorumFraction)
+        returns (uint256)
+    {
+        return super.quorum(blockNumber);
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
-        return interfaceId == type(IERC721ReceiverUpgradeable).interfaceId || super.supportsInterface(interfaceId);
-    }
-
-    function _msgSender()
-        internal
-        view
-        virtual
-        override(ContextUpgradeable, ERC2771ContextUpgradeable)
-        returns (address sender)
-    {
-        return ERC2771ContextUpgradeable._msgSender();
-    }
-
-    function _msgData()
-        internal
-        view
-        virtual
-        override(ContextUpgradeable, ERC2771ContextUpgradeable)
-        returns (bytes calldata)
-    {
-        return ERC2771ContextUpgradeable._msgData();
+        return super.supportsInterface(interfaceId);
     }
 
     function swapNAUForETH(uint256 amount) private {
@@ -307,14 +344,6 @@ contract OseanDao is
         require(_newUsdt != address(0), "usdt = zero");
         emit UsdtAddressUpdated(usdt, _newUsdt);
         usdt = _newUsdt;
-    }
-
-    // Function to change the Uniswap Router address
-    function setUniswapRouterAddress(address _newRouter) public onlyGovernance {
-        require(_newRouter != address(0), "router = zero");
-        emit UniswapRouterUpdated(uniswapRouterAddress, _newRouter);
-        uniswapRouterAddress = _newRouter;
-        uniswapRouter = IUniswapV2Router02(_newRouter);
     }
 
     receive() external payable override {}
