@@ -1,0 +1,87 @@
+{
+  "scenario": "swap-and-disperse",
+  "timestamp": "2026-03-22T18:23:04.745Z",
+  "network": {
+    "rpcUrl": "https://ethereum-rpc.publicnode.com",
+    "tokenAddress": "0x9C0B8C4fCCe464dd5e3C46161DA22B181D0df095",
+    "routerAddress": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2",
+    "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+  },
+  "seller": "0x75C2b65B842B5EA18D27E81e8D80A82d940f0031",
+  "config": {
+    "sellAmountHuman": "0.0001",
+    "gasLimit": "3000000"
+  },
+  "tx": {
+    "hash": "0xf4f1112476b670dcdda56aa06660010e18f59e5a37335ff1cf646d7cb6f4c17f",
+    "status": 1,
+    "gasUsed": "266510",
+    "blockNumber": 24714815
+  },
+  "interpretation": {
+    "swapbackSuccess": true,
+    "swapbackFailure": false,
+    "autoDisperse": true,
+    "summary": "Success: this sell triggered both swapback and auto-disperse in one transaction."
+  },
+  "before": {
+    "label": "BEFORE SELL",
+    "sellerToken": "7379910.344988382347012377",
+    "sellerEth": "0.035312610163695994",
+    "contractToken": "204858.01419935908806314",
+    "contractEth": "0.0",
+    "nautorWalletEth": "0.000774140474450595",
+    "daoWalletEth": "0.000774140474450595",
+    "buyTax": "2",
+    "sellTax": "2",
+    "swapTokensAtAmount": "50000.0",
+    "autoDisperseThreshold": "0.000000000000000001",
+    "maxSwapTokens": "200000.0",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2"
+  },
+  "after": {
+    "label": "AFTER SELL",
+    "sellerToken": "7379910.344888382347012377",
+    "sellerEth": "0.035299473496844094",
+    "contractToken": "4858.01420135908806314",
+    "contractEth": "0.0",
+    "nautorWalletEth": "0.001087363322083377",
+    "daoWalletEth": "0.001087363322083377",
+    "buyTax": "2",
+    "sellTax": "2",
+    "swapTokensAtAmount": "50000.0",
+    "autoDisperseThreshold": "0.000000000000000001",
+    "maxSwapTokens": "200000.0",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2"
+  },
+  "events": [
+    {
+      "name": "SwapBackAttempt",
+      "args": {}
+    },
+    {
+      "name": "SwapBackSuccess",
+      "args": {}
+    },
+    {
+      "name": "FeeTransferSuccess",
+      "args": {}
+    },
+    {
+      "name": "FeeTransferSuccess",
+      "args": {}
+    },
+    {
+      "name": "FeesDispersed",
+      "args": {}
+    }
+  ],
+  "eventNames": [
+    "SwapBackAttempt",
+    "SwapBackSuccess",
+    "FeeTransferSuccess",
+    "FeeTransferSuccess",
+    "FeesDispersed"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "scenario": "swap-and-disperse",
+  "timestamp": "2026-03-22T12:25:13.164Z",
+  "network": {
+    "rpcUrl": "https://ethereum-rpc.publicnode.com",
+    "tokenAddress": "0x9C0B8C4fCCe464dd5e3C46161DA22B181D0df095",
+    "routerAddress": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2",
+    "weth": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+  },
+  "seller": "0x75C2b65B842B5EA18D27E81e8D80A82d940f0031",
+  "config": {
+    "sellAmountHuman": "0.0001",
+    "gasLimit": "3000000"
+  },
+  "tx": {
+    "hash": "0xf227c2d28f4199e369350981e766d50209a08da3ff10f1cfe97d3d55eb6f8f4b",
+    "status": 1,
+    "gasUsed": "225837",
+    "blockNumber": 24713036
+  },
+  "interpretation": {
+    "swapbackSuccess": true,
+    "swapbackFailure": false,
+    "autoDisperse": false,
+    "summary": "Swapback happened, but disperse did not. Most likely contract ETH stayed at or below autoDisperseThreshold."
+  },
+  "before": {
+    "label": "BEFORE SELL",
+    "sellerToken": "5424760.098639787031918503",
+    "sellerEth": "0.040040442175771845",
+    "contractToken": "109130.200913621776161599",
+    "contractEth": "0.000285433372456451",
+    "nautorWalletEth": "0.000266528608528305",
+    "daoWalletEth": "0.000266528608528305",
+    "buyTax": "2",
+    "sellTax": "2",
+    "swapTokensAtAmount": "50000.0",
+    "autoDisperseThreshold": "0.25",
+    "maxSwapTokens": "200000.0",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2"
+  },
+  "after": {
+    "label": "AFTER SELL",
+    "sellerToken": "5424760.098539787031918503",
+    "sellerEth": "0.040013431944241577",
+    "contractToken": "0.000002",
+    "contractEth": "0.000440017778781034",
+    "nautorWalletEth": "0.000266528608528305",
+    "daoWalletEth": "0.000266528608528305",
+    "buyTax": "2",
+    "sellTax": "2",
+    "swapTokensAtAmount": "50000.0",
+    "autoDisperseThreshold": "0.25",
+    "maxSwapTokens": "200000.0",
+    "pair": "0x8507DB4236F5DF5042B42563fC8e247561A8eAc2"
+  },
+  "events": [
+    {
+      "name": "SwapBackAttempt",
+      "args": {}
+    },
+    {
+      "name": "SwapBackSuccess",
+      "args": {}
+    }
+  ],
+  "eventNames": [
+    "SwapBackAttempt",
+    "SwapBackSuccess"
+  ]
+}

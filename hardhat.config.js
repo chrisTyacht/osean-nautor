@@ -1,6 +1,6 @@
 require("@matterlabs/hardhat-zksync-solc");
 require("@matterlabs/hardhat-zksync-verify");
-
+require("@matterlabs/hardhat-zksync-ethers");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
